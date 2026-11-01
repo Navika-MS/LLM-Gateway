@@ -1,0 +1,1 @@
+{"root":["./src/App.tsx","./src/api.ts","./src/main.tsx","./src/components/AuditLog.tsx","./src/components/ContextInspector.tsx","./src/components/Playground.tsx","./src/components/PolicyView.tsx","./src/components/Results.tsx"],"version":"5.6.3"}

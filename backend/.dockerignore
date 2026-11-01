@@ -1,0 +1,5 @@
+__pycache__
+*.pyc
+data/*.db
+eval/.bench_audit.db
+.pytest_cache

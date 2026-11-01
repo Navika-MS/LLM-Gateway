@@ -1,0 +1,48 @@
+# Default:            docker compose up --build              (~1 GB RAM, regex + heuristic stages)
+# With DeBERTa:       INSTALL_ML=true ML_MODE=deberta docker compose up --build
+# With local LLM:     docker compose --profile llm up --build  (then: docker compose exec ollama ollama pull qwen2.5:1.5b)
+services:
+  gateway:
+    build:
+      context: ./backend
+      args:
+        INSTALL_ML: ${INSTALL_ML:-false}
+    ports: ["8000:8000"]
+    environment:
+      ML_MODE: ${ML_MODE:-heuristic}            # off | heuristic | deberta
+      INTENT_MODE: ${INTENT_MODE:-heuristic}    # off | heuristic | ollama
+      PII_ENGINE: ${PII_ENGINE:-regex}          # regex | presidio (needs INSTALL_ML=true)
+      RAG_LLM: ${RAG_LLM:-extractive}           # extractive | ollama
+      FAIL_MODE: ${FAIL_MODE:-strict}
+      OLLAMA_URL: http://ollama:11434
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-qwen2.5:1.5b}
+      TOKENIZATION_SECRET: ${TOKENIZATION_SECRET:-change-me-in-production}
+      GATEWAY_JWT_SECRET: ${GATEWAY_JWT_SECRET:-}
+      CORS_ORIGINS: http://localhost:8080,http://localhost:5173
+    volumes:
+      - gateway-data:/app/data
+      - hf-models:/models
+    deploy:
+      resources:
+        limits:
+          memory: 3g
+
+  ui:
+    build: ./frontend
+    ports: ["8080:8080"]
+    depends_on: [gateway]
+
+  ollama:
+    image: ollama/ollama:latest
+    profiles: ["llm"]
+    ports: ["11434:11434"]
+    volumes: [ollama:/root/.ollama]
+    deploy:
+      resources:
+        limits:
+          memory: 4g
+
+volumes:
+  gateway-data:
+  hf-models:
+  ollama:

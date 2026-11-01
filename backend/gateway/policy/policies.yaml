@@ -1,0 +1,109 @@
+# Gateway security policy (MVP: evaluated by gateway/policy/engine.py).
+# Design goal: default deny. Anything not explicitly allowed is blocked or
+# sent for human approval. Later this file maps 1:1 onto OPA/Rego data.
+
+thresholds:
+  block: 0.80            # aggregate risk at/above this => BLOCK
+  approval: 0.60         # uncertain zone => REQUIRE_APPROVAL (never silently allowed)
+  context_quarantine: 0.70
+  context_sanitize: 0.40
+  # untrusted sources get stricter thresholds (subtracted from the above)
+  external_source_penalty: 0.15
+
+# Findings in these categories are verdicts, whatever the role.
+always_block_categories:
+  - direct_injection
+  - prompt_extraction
+  - jailbreak
+  - indirect_injection
+  - exfiltration
+  - ml_injection
+  - multi_turn
+
+# Operation categories detected in prompts. They are NOT blocked because of the
+# words alone: the principal's role decides. Without an authorized workflow the
+# strict MVP policy denies them.
+operations:
+  op_destructive:            {default: BLOCK, with_workflow: REQUIRE_APPROVAL}
+  op_sensitive_modification: {default: BLOCK, with_workflow: REQUIRE_APPROVAL}
+  op_security_bypass:        {default: BLOCK, with_workflow: BLOCK}   # never via chat
+  op_privilege_escalation:   {default: BLOCK, with_workflow: REQUIRE_APPROVAL}
+  op_data_exfiltration:      {default: BLOCK, with_workflow: REQUIRE_APPROVAL}
+
+roles:
+  employee:
+    description: Regular staff using the HR assistant
+    permissions: [chat, rag:read, tool:search_employees, tool:get_employee]
+    pii_allowed: [EMPLOYEE_ID]
+    workflows: []
+  hr_manager:
+    description: HR staff who maintain employee records
+    permissions: [chat, rag:read, tool:search_employees, tool:get_employee, tool:update_employee,
+                  tool:send_email, tool:export_records]
+    pii_allowed: [EMPLOYEE_ID, EMAIL, PHONE_IN, PHONE_INTL, ADDRESS, PERSON]
+    workflows: [op_sensitive_modification, op_data_exfiltration]
+  security_admin:
+    description: Platform / security administrators
+    permissions: ["*"]
+    pii_allowed: [EMPLOYEE_ID, EMAIL, PHONE_IN, PHONE_INTL, ADDRESS, PERSON, IP_ADDRESS]
+    workflows: [op_destructive, op_sensitive_modification, op_privilege_escalation, op_data_exfiltration]
+    can_approve: true
+
+# Tool / action authorization for agents (Mode 2: tool-call guard).
+# Unknown tools are denied.
+tools:
+  search_employees:
+    action: read
+    risk: low
+    permission: tool:search_employees
+    max_results: 20
+  get_employee:
+    action: read
+    risk: low
+    permission: tool:get_employee
+    # fields returned only to roles holding pii permission for them
+    sensitive_fields: [salary, pan, aadhaar, bank_account, phone]
+  update_employee:
+    action: update
+    risk: high
+    permission: tool:update_employee
+    protected_fields: [salary, bank_account, role, pan, aadhaar]   # changing these needs approval
+    max_records: 1
+  delete_employee:
+    action: delete
+    risk: critical
+    permission: tool:delete_employee
+    requires_approval: true
+    max_records: 1
+  send_email:
+    action: external_send
+    risk: high
+    permission: tool:send_email
+    allowed_recipient_domains: [acme.com, acme.internal]
+    block_high_risk_pii: true
+  export_records:
+    action: export
+    risk: high
+    permission: tool:export_records
+    requires_approval: true
+    max_rows: 100
+  run_sql:
+    action: query
+    risk: high
+    permission: tool:run_sql
+    read_only: true
+    max_rows: 50
+  create_user:
+    action: admin
+    risk: critical
+    permission: tool:create_user
+    requires_approval: true
+  disable_audit_logging:
+    action: security_config
+    risk: critical
+    deny_always: true
+
+# Tools that must never run while the agent's context contains quarantined or
+# untrusted content, unless a human approves (stops indirect injection from
+# driving actions).
+taint_sensitive_actions: [update, delete, external_send, export, admin, security_config]
