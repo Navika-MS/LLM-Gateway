@@ -47,6 +47,8 @@ load, Ollama is down), the gateway **fails closed**.
 
 More detail, including design decisions and the roadmap: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
+Step-by-step guide for Windows/macOS/Linux, including the ML stages: [HOW_TO_RUN.md](HOW_TO_RUN.md).
+
 ## Quick start (no Docker, ~2 minutes)
 
 Needs Python 3.10+ and Node 18+.
