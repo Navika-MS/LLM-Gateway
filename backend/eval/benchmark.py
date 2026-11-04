@@ -27,10 +27,11 @@ os.environ.setdefault("AUDIT_DB", str(HERE / ".bench_audit.db"))
 from gateway.config import get_settings  # noqa: E402
 from gateway.models import ContextChunk, ContextRequest, Decision, Principal, PromptRequest  # noqa: E402
 from gateway import orchestrator  # noqa: E402
-from gateway.stages import conversation  # noqa: E402
+from gateway.stages import conversation, ml_classifier, normalizer  # noqa: E402
 
 EMPLOYEE = Principal(user_id="bench", role="employee", tenant="bench")
 FLAGGED = {Decision.BLOCK, Decision.REQUIRE_APPROVAL}
+SWEEP = False
 
 
 def predict(row: dict) -> tuple[bool, float, float | None]:
@@ -45,9 +46,23 @@ def predict(row: dict) -> tuple[bool, float, float | None]:
     else:
         res = orchestrator.guard_prompt(PromptRequest(text=row["text"]), EMPLOYEE, log=False)
         flagged = res.decision in FLAGGED
-        st = next((s for s in res.stages if s.name == "ml_classifier" and s.status == "ok"), None)
-        ml = st.risk if st else None
-    return flagged, (time.perf_counter() - t0) * 1000, ml
+    ms = (time.perf_counter() - t0) * 1000
+    if SWEEP and row["kind"] == "prompt":
+        # classifier alone on every prompt (the pipeline skips it after a regex hard block)
+        st = ml_classifier.scan(normalizer.normalize(row["text"]))
+        ml = st.risk if st.status == "ok" else None
+    return flagged, ms, ml
+
+
+def throughput(rows: list[dict], workers: int) -> float:
+    """Requests per second for prompt samples with `workers` concurrent callers."""
+    from concurrent.futures import ThreadPoolExecutor
+
+    texts = [r["text"] for r in rows if r["kind"] == "prompt"]
+    t0 = time.perf_counter()
+    with ThreadPoolExecutor(workers) as ex:
+        list(ex.map(lambda t: orchestrator.guard_prompt(PromptRequest(text=t), EMPLOYEE, log=False), texts))
+    return len(texts) / (time.perf_counter() - t0)
 
 
 def metrics(pairs: list[tuple[bool, bool]]) -> dict:
@@ -109,7 +124,11 @@ def main():
     ap.add_argument("--hf", action="append", default=[], help="HF dataset id to add (e.g. deepset/prompt-injections)")
     ap.add_argument("--hf-limit", type=int, default=500)
     ap.add_argument("--show-errors", action="store_true")
+    ap.add_argument("--sweep", action="store_true", help="also score every prompt with the classifier alone, per threshold")
+    ap.add_argument("--concurrency", type=int, default=0, help="measure requests/second with N concurrent callers")
     args = ap.parse_args()
+    global SWEEP
+    SWEEP = args.sweep
 
     rows = [json.loads(l) for l in (HERE / "dataset.jsonl").read_text(encoding="utf-8").splitlines() if l.strip()]
     for name in args.hf:
@@ -137,13 +156,14 @@ def main():
         if r.get("technique"):
             groups[f"{su} | technique={r['technique']}"].append((y, r["pred_unsafe"]))
     table = {k: metrics(v) for k, v in sorted(groups.items())}
+    rps = round(throughput(rows, args.concurrency), 1) if args.concurrency else None
     suites = {k.split("=", 1)[1]: v for k, v in table.items() if k.startswith("suite=")}
     sweep = threshold_sweep(results)
     lat_sorted = sorted(lat)
     summary = {
         "config": {"ml_mode": s.ml_mode, "intent_mode": s.intent_mode, "pii_engine": s.pii_engine, "split": args.split},
         "latency_ms": {"p50": round(statistics.median(lat), 2), "p95": round(lat_sorted[int(0.95 * (len(lat) - 1))], 2),
-                       "max": round(max(lat), 2)},
+                       "max": round(max(lat), 2), "throughput_rps": rps, "concurrency": args.concurrency or None},
         "suites": suites,
         "metrics": table,
         "ml_threshold_sweep": sweep,
@@ -154,7 +174,8 @@ def main():
         "# Benchmark report", "",
         f"Config: `ML_MODE={s.ml_mode}`, `INTENT_MODE={s.intent_mode}`, `PII_ENGINE={s.pii_engine}`, split `{args.split}`, "
         f"{len(results)} samples.", "",
-        f"Latency per request: p50 {summary['latency_ms']['p50']} ms, p95 {summary['latency_ms']['p95']} ms.", "",
+        f"Latency per request: p50 {summary['latency_ms']['p50']} ms, p95 {summary['latency_ms']['p95']} ms"
+        + (f"; throughput {rps} requests/s with {args.concurrency} concurrent callers." if rps else ".") + "", "",
         "> How to read this: every dataset (suite) is reported separately and never pooled. "
         "`builtin` was written by the same person who wrote the rules (tuned on its `dev` split only), so its numbers "
         "are optimistic. `challenge` is a held-out set of harder attacks that was never used for tuning. "
@@ -186,7 +207,8 @@ def main():
     for su, a in suites.items():
         print(f"{su:<28} n={a['n']:<4} precision {fmt(a['precision'])} recall {fmt(a['recall'])} F1 {fmt(a['f1'])} "
               f"FPR {fmt(a['false_positive_rate'])}")
-    print(f"latency p50 {summary['latency_ms']['p50']} ms, p95 {summary['latency_ms']['p95']} ms")
+    print(f"latency p50 {summary['latency_ms']['p50']} ms, p95 {summary['latency_ms']['p95']} ms"
+          + (f", {rps} req/s @ {args.concurrency} callers" if rps else ""))
     if args.show_errors:
         for r in errors:
             print(("MISS " if r["label"] == "unsafe" else "FP   ") + r["id"], r["split"], repr(r["text"][:140]))

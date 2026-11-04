@@ -27,6 +27,7 @@ from .normalizer import NormalizedText
 
 log = logging.getLogger(__name__)
 STAGE = "ml_classifier"
+MAX_VIEWS = 6  # normalized text first, then decoded / de-obfuscated views
 
 
 class Classifier(Protocol):
@@ -97,16 +98,18 @@ class DebertaClassifier:
         return [self._tok.decode(ids[i:i + size]) for i in range(0, len(ids), stride)][:16]
 
     def score(self, texts: list[str]) -> list[float]:
-        out = []
+        # all windows of all views go through the model in ONE batched call
+        owners, wins = [], []
+        for i, t in enumerate(texts):
+            for w in self._windows(t):
+                owners.append(i)
+                wins.append(w)
         with self._lock:
-            for t in texts:
-                wins = self._windows(t)
-                preds = self._pipe(wins, batch_size=4)
-                best = 0.0
-                for p in preds:
-                    s = p["score"] if p["label"].upper() in {"INJECTION", "LABEL_1", "UNSAFE"} else 1 - p["score"]
-                    best = max(best, s)
-                out.append(best)
+            preds = self._pipe(wins, batch_size=8)
+        out = [0.0] * len(texts)
+        for i, p in zip(owners, preds):
+            s = p["score"] if p["label"].upper() in {"INJECTION", "LABEL_1", "UNSAFE"} else 1 - p["score"]
+            out[i] = max(out[i], s)
         return out
 
 
@@ -148,7 +151,14 @@ def scan(norm: NormalizedText, *, stage_name: str = STAGE, threshold: float | No
         return StageResult(name=stage_name, status="error", risk=0.0, error=_clf_error or "classifier unavailable",
                            latency_ms=round((time.perf_counter() - t0) * 1000, 2))
     threshold = threshold if threshold is not None else get_settings().ml_threshold
-    views = [(n, v) for n, v in norm.all_views() if v.strip()]
+    # identical views are scored once, and at most MAX_VIEWS views go to the model
+    views, seen = [], set()
+    for n, v in norm.all_views():
+        key = v.strip()
+        if key and key not in seen:
+            seen.add(key)
+            views.append((n, v))
+    views = views[:MAX_VIEWS]
     try:
         scores = clf.score([v for _, v in views])
     except Exception as e:

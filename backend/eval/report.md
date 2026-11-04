@@ -2,7 +2,7 @@
 
 Config: `ML_MODE=heuristic`, `INTENT_MODE=heuristic`, `PII_ENGINE=regex`, split `all`, 263 samples.
 
-Latency per request: p50 0.56 ms, p95 1.15 ms.
+Latency per request: p50 0.31 ms, p95 0.6 ms; throughput 1892.1 requests/s with 8 concurrent callers.
 
 > How to read this: every dataset (suite) is reported separately and never pooled. `builtin` was written by the same person who wrote the rules (tuned on its `dev` split only), so its numbers are optimistic. `challenge` is a held-out set of harder attacks that was never used for tuning. Public sets (`--hf ...`) are the independent check.
 
