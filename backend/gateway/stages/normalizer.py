@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import base64
 import binascii
+import codecs
 import html
 import re
 import unicodedata
@@ -67,6 +68,14 @@ class NormalizedText:
 
     def all_views(self) -> list[tuple[str, str]]:
         return [("normalized", self.normalized), *self.views.items()]
+
+
+_COMMON_WORDS = {"the", "and", "all", "you", "your", "to", "of", "a", "is", "me", "tell", "previous", "instructions",
+                 "ignore", "system", "prompt", "reveal", "password", "admin", "show", "give", "now", "are", "with"}
+
+
+def _english_score(s: str) -> int:
+    return sum(1 for w in re.findall(r"[a-z]+", s.lower()) if w in _COMMON_WORDS)
 
 
 def _printable_ratio(s: str) -> float:
@@ -206,7 +215,13 @@ def normalize(text: str) -> NormalizedText:
         views["compact"] = re.sub(r"[^a-z]", "", despaced.lower())
         flag("OBF_CHAR_SPLIT", Severity.LOW, "character-split words re-joined for inspection")
 
-    # 8. leetspeak view (cheap; only kept when it changes something)
+    # 8. ROT13: only kept when the rotated text reads clearly more like English than the original
+    rot = codecs.decode(visible, "rot13")
+    if _english_score(rot) >= 3 and _english_score(rot) > 2 * _english_score(visible):
+        views["rot13_decoded"] = rot
+        flag("OBF_ROT13", Severity.LOW, "ROT13 text decoded for inspection")
+
+    # 9. leetspeak view (cheap; only kept when it changes something)
     leet = visible.lower().translate(LEET)
     if leet != visible.lower() and re.search(r"[a-z][0-9@$!|][a-z]", visible.lower()):
         views["deleet"] = leet

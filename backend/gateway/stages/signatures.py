@@ -92,6 +92,37 @@ RULES: list[Rule] = [
       r"\b(?:i\s+am|i'm|this\s+is)\s+(?:your|the|an?)\s+(?:developer|creator|administrator|admin|owner|openai|anthropic|security\s+team)\b.{0,60}\b(?:authori[sz]e|allow|permit|override|grant|unlock|disable)",
       "false authority claim used to unlock behaviour"),
 
+    # ---------------- persona and extraction tricks ----------------
+    R("JB_PERSONA_NO_REFUSAL", "jailbreak", H,
+      r"\byou\s+are\s+(?:now\s+)?['\"]?[A-Z]?\w+['\"]?,?\s+(?:an?\s+)?(?:\w+\s+){0,4}?(?:who|which|that)\s+(?:answers\s+anything|never\s+refuses|has\s+no\s+(?:rules|limits|filters)|can\s+do\s+anything|ignores)"
+      r"|\b(?:\w+\s+)?never\s+refuses\b|\beven\s+(?:things|what)\s+(?:your|its|his|her)\s+(?:creators|developers|makers|rules)\s+(?:told|say|said)",
+      "persona set up to never refuse"),
+    R("JB_UNRESTRICTED_AI_VOICE", "jailbreak", H,
+      r"\b(?:an?\s+)?(?:ai|assistant|model|chatbot|bot)\s+(?:with\s+no|without\s+(?:any\s+)?)\s*(?:guidelines|rules|restrictions|filters|limits|ethics|safety)\b",
+      "asks for the voice of an unrestricted AI"),
+    R("EXT_ACROSTIC", "prompt_extraction", C,
+      r"\b(?:first|last)\s+(?:letter|word|character)s?\s+of\s+(?:each|every)\s+(?:line|sentence|word|paragraph)\b.{0,40}\b(?:spell|form|encode|contain)",
+      "acrostic / steganographic prompt extraction"),
+    R("EXT_TRANSFORM_PROMPT", "prompt_extraction", H,
+      r"\b(?:translate|summari[sz]e|paraphrase|rewrite|encode|convert|list|tabulate|describe)\b.{0,30}\byour\s+(?:own\s+)?(?:initial\s+|original\s+|system\s+|hidden\s+|full\s+)?(?:instructions|configuration|rules|system\s+prompt|prompt|directives)\b",
+      "asks to transform its own instructions (indirect extraction)"),
+    R("EXT_TOLD_BEFORE", "prompt_extraction", H,
+      r"\bwhat\s+were\s+you\s+(?:told|instructed|given)\b|\b(?:its|your)\s+(?:full\s+|entire\s+|complete\s+)?system\s+prompt\b.{0,30}\b(?:word\s+for\s+word|verbatim|exactly|in\s+full)"
+      r"|\b(?:reads?|recites?|reveals?|prints?)\s+(?:out\s+)?(?:its|their)\s+(?:full\s+|entire\s+)?(?:system\s+prompt|instructions)",
+      "asks what the model was told before the conversation"),
+
+    # ---------------- non-English overrides (stopgap) ----------------
+    # The DeBERTa model is English-focused. These cover the most common phrasings in a few
+    # languages; a multilingual classifier is the real fix (see README, "Known limitations").
+    R("INJ_MULTILINGUAL_OVERRIDE", "direct_injection", H,
+      r"\b(?:ignor(?:ez|e|a|iere|eer)|oubliez|olvida|vergiss|negeer|dimentica|esque[cç]a)\b.{0,30}"
+      r"\b(?:instructions?|instrucciones|instru[cç][õo]es|istruzioni|anweisungen|instructies|consignes|r[eè]gles|regeln|reglas)\b"
+      r"|(?:निर्देशों|निर्देश).{0,20}(?:अनदेखा|भूल)",
+      "instruction override in another language"),
+    R("EXT_MULTILINGUAL_PROMPT", "prompt_extraction", H,
+      r"\b(?:prompt\s+(?:syst[eè]me|del\s+sistema|di\s+sistema|do\s+sistema)|systemprompt|systeemprompt|system-?prompt)\b|सिस्टम\s*प्रॉम्प्ट",
+      "system prompt mentioned in another language"),
+
     # ---------------- B. indirect injection markers (mainly in documents) ----------------
     R("IND_SYSTEM_OVERRIDE", "indirect_injection", C,
       r"\b(?:system|admin|security|emergency|priority)\s+(?:override|update|notice|instruction|command|directive)\s*[:!]",
