@@ -38,7 +38,21 @@ IMPERATIVE_START = re.compile(
     r"include|append|insert|summari[sz]e\s+only|act\s+as|pretend|you\s+(?:must|should|will|are\s+now|have\s+to))\b",
     re.I,
 )
-ADDRESSES_MODEL = re.compile(r"\b(?:you|your)\b.{0,40}\b(?:must|should|will|need\s+to|are\s+(?:now|required)|have\s+to)\b|\b(?:ai|assistant|model|llm|agent|chatbot)\b\s*[:,]", re.I)
+# Second-person directives ("you must submit the form") are normal in policies written for
+# humans, so on their own they are NOT evidence of injection. What gives an injection away is
+# that it addresses an AI reader, asks for secrecy, or requests a risky action nobody asked for.
+SECOND_PERSON = re.compile(r"\b(?:you|your)\b.{0,40}\b(?:must|should|will|need\s+to|are\s+(?:now|required)|have\s+to)\b", re.I)
+_AI_NOUN = (r"(?:ai|a\.i\.|assistant|chatbot|bot|llm|(?:large\s+)?language\s+models?|models?|agents?|copilot|gpt|"
+            r"summari[sz]er|(?:automated|ai|screening)\s+(?:\w+\s+)?(?:tools?|systems?|readers?|agents?|screeners?))")
+ADDRESSES_AI = re.compile(
+    r"\b(?:(?:note|message|instructions?|s\.?)\s+(?:to|for)|attention|dear|hey|hello|hi|to\s+whichever|for\s+(?:any|every|the)|"
+    r"if\s+you\s+are\s+(?:an?|the))\s+(?:the\s+|any\s+|an?\s+|whichever\s+)?(?:\w+\s+){0,2}?" + _AI_NOUN + r"\b"
+    r"|^\s*(?:\w+\s+)?(?:bot|assistant|ai|agent|model|llm|summari[sz]er|chatbot)\s*[,:]"
+    r"|\b(?:ai|assistant|bot|model|llm|agent)s?\s+(?:reading|processing|summari[sz]ing|parsing)\s+this\b",
+    re.I | re.M)
+COVERT = re.compile(
+    r"\b(?:quietly|silently|secretly|covertly|without\s+(?:the\s+user|anyone|them)\s+(?:knowing|noticing))\b"
+    r"|\b(?:the\s+)?user\s+has\s+already\s+(?:approved|authori[sz]ed|consented|agreed)\b", re.I)
 # actions that are suspicious in a document even without addressing the model directly
 HIGH_RISK_ACTIONS = {"external_transfer", "privilege_change", "security_tampering", "instruction_manipulation"}
 ACTION_INTENTS = {"external_transfer", "data_staging", "deletion", "modification", "privilege_change", "security_tampering", "instruction_manipulation"}
@@ -49,7 +63,7 @@ def _sentences(text: str) -> list[str]:
     return [s for s in SENT_SPLIT.split(text) if s and s.strip()]
 
 
-def instruction_analysis(text: str, user_query: str) -> tuple[float, list[str], list[Finding]]:
+def instruction_analysis(text: str, user_query: str, trust: str = "unknown") -> tuple[float, list[str], list[Finding]]:
     sents = _sentences(text)
     if not sents:
         return 0.0, [], []
@@ -57,10 +71,13 @@ def instruction_analysis(text: str, user_query: str) -> tuple[float, list[str], 
     flagged, findings = [], []
     for s in sents:
         imperative = bool(IMPERATIVE_START.search(s))
-        addresses = bool(ADDRESSES_MODEL.search(s))
+        addresses_ai = bool(ADDRESSES_AI.search(s))
+        covert = bool(COVERT.search(s))
+        second_person = bool(SECOND_PERSON.search(s))
         intents = set(tag_intents(s)) & ACTION_INTENTS
-        unrequested = intents - set(user_intents)
-        if addresses or (imperative and unrequested & HIGH_RISK_ACTIONS):
+        risky = (intents - set(user_intents)) & HIGH_RISK_ACTIONS
+        untrusted = trust in {"external", "unknown"}
+        if addresses_ai or covert or (imperative and risky) or (second_person and risky and untrusted):
             flagged.append(s)
     ratio = len(flagged) / len(sents)
     risk = 0.0
@@ -95,7 +112,8 @@ def inspect_chunk(chunk: ContextChunk, user_query: str) -> tuple[ChunkVerdict, l
     sig.findings = [f for f in sig.findings if f.category in signatures.ATTACK_CATEGORIES]
     sig.risk = max((f.severity.weight for f in sig.findings), default=0.0)
     ml = ml_classifier.scan(norm, stage_name="context_ml")
-    ia_risk, flagged_sents, ia_findings = instruction_analysis(norm.normalized + "\n" + "\n".join(norm.views.values()), user_query)
+    ia_risk, flagged_sents, ia_findings = instruction_analysis(norm.normalized + "\n" + "\n".join(norm.views.values()), user_query,
+                                                               chunk.trust)
     obf = [f for f in norm.findings if f.severity in (Severity.MEDIUM, Severity.HIGH)]
 
     findings = obf + sig.findings + ml.findings + ia_findings
