@@ -7,3 +7,4 @@ backend/eval/.bench_audit.db
 frontend/node_modules/
 frontend/dist/
 .env
+*.tsbuildinfo
