@@ -237,14 +237,14 @@ The holdout row is the honest one: rules fixed the classes they were written for
 phrasings. That is the reason the gateway does not rely on text filters alone. Tool authorization, gateway-owned
 taint tracking and output DLP are designed to hold when a prompt gets through.
 
-With DeBERTa (`ML_MODE=deberta`, 16 GB laptop, CPU only, 2026-11-04; p50 200 ms, p95 341 ms):
+With DeBERTa (`ML_MODE=deberta`, 16 GB laptop, CPU only, 2026-11-04; p50 178 ms, p95 346 ms):
 
-| Suite | Precision | Recall | FPR |
-|---|---|---|---|
-| builtin | 0.971 | 1.000 | 0.062 |
-| challenge | 0.885 | 1.000 | 0.188 |
-| **holdout** | 1.000 | **0.800** | 0.000 |
-| **deepset/prompt-injections** (116) | 1.000 | **0.367** | 0.000 |
+| Suite | Precision | Recall | FPR | FPR before the false-alarm fix |
+|---|---|---|---|---|
+| builtin | 0.985 | 1.000 | **0.031** | 0.062 |
+| challenge | 1.000 | 1.000 | **0.000** | 0.188 |
+| **holdout** | 1.000 | **0.800** | 0.000 | 0.000 |
+| **deepset/prompt-injections** (116) | 1.000 | **0.367** | 0.000 | 0.000 |
 
 What these numbers say:
 
@@ -256,8 +256,9 @@ What these numbers say:
   >99% confident on its false alarms ("Please ignore the typos", "ignore the previous email thread", internal MFA
   setup steps). So instead of moving the threshold, a model-only verdict is now downgraded when the text matches a
   narrow benign phrasing and no other stage objected, and the model alone can no longer quarantine a trusted
-  internal document. Both rules were written from these false positives, so re-run to measure them; the holdout
-  suite was not used.
+  internal document. That halved builtin false alarms (6.2% to 3.1%) and removed them on challenge (18.8% to 0)
+  with no loss of recall anywhere. Both rules were written from those false positives, so treat the improvement as
+  optimistic; holdout and deepset, which were not used, are unchanged.
 
 ```bash
 pip install datasets
