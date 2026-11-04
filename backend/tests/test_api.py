@@ -77,3 +77,17 @@ def test_scenarios_match_expectations(client):
         r = client.post(url[s["mode"]], json=s["body"], headers={"X-API-Key": s.get("key", "demo-employee-key")})
         assert r.status_code == 200, s["id"]
         assert r.json()["decision"] == s["expect"], s["id"]
+
+
+def test_unhandled_errors_return_json(monkeypatch):
+    from fastapi.testclient import TestClient
+    from gateway import orchestrator
+    from gateway.main import app
+
+    def boom(*a, **k):
+        raise ValueError("kaboom")
+
+    monkeypatch.setattr(orchestrator, "guard_prompt", boom)
+    with TestClient(app, raise_server_exceptions=False) as c:
+        r = c.post("/v1/guard/prompt", json={"text": "hi"}, headers=EMP)
+    assert r.status_code == 500 and "kaboom" in r.json()["detail"]

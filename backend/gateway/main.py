@@ -5,7 +5,8 @@ import logging
 from contextlib import asynccontextmanager
 from typing import Optional
 
-from fastapi import Depends, FastAPI, HTTPException
+from fastapi import Depends, FastAPI, HTTPException, Request
+from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 
 from . import __version__, audit, orchestrator
@@ -44,6 +45,13 @@ app = FastAPI(
     description="Zero-trust security gateway for RAG systems, AI agents and LLM apps.",
 )
 app.add_middleware(CORSMiddleware, allow_origins=list(get_settings().cors_origins), allow_methods=["*"], allow_headers=["*"])
+
+
+@app.exception_handler(Exception)
+async def unhandled(request: Request, exc: Exception) -> JSONResponse:
+    """Never answer with a bare 'Internal Server Error': log the traceback, return JSON the UI can show."""
+    log.exception("unhandled error on %s %s", request.method, request.url.path)
+    return JSONResponse(status_code=500, content={"detail": f"internal error on {request.url.path}: {type(exc).__name__}: {exc}"})
 
 
 @app.get("/health")

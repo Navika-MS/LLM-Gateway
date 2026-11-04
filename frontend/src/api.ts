@@ -98,7 +98,14 @@ export async function api<T>(path: string, apiKey: string, body?: unknown): Prom
     body: body === undefined ? undefined : JSON.stringify(body),
   });
   const text = await res.text();
-  const data = text ? JSON.parse(text) : null;
-  if (!res.ok) throw new Error(data?.detail ? JSON.stringify(data.detail) : `HTTP ${res.status}`);
+  let data: any = null;
+  try {
+    data = text ? JSON.parse(text) : null;
+  } catch {
+    // not JSON: usually the backend is down (dev proxy error) or crashed before answering
+    throw new Error(`HTTP ${res.status} from ${path}: ${text.slice(0, 200) || "no response body"}` +
+      (res.status >= 500 ? " (is the backend running? check its terminal for a traceback)" : ""));
+  }
+  if (!res.ok) throw new Error(data?.detail ? JSON.stringify(data.detail) : `HTTP ${res.status} from ${path}`);
   return data as T;
 }
