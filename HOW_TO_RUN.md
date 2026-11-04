@@ -114,16 +114,20 @@ Expect 1 to 3 seconds per request on CPU. If you stop Ollama, requests get REQUI
 
 ### Benchmark with DeBERTa
 
-Needs the DeBERTa install above (PyTorch first), then:
+Run everything from `backend` with the venv active. A new venv needs all three installs, in this order:
 
 **Windows**
 ```powershell
+pip install torch --index-url https://download.pytorch.org/whl/cpu
+pip install -r requirements-ml.txt
 pip install datasets
 $env:ML_MODE="deberta"
 python eval/benchmark.py --hf deepset/prompt-injections --sweep --concurrency 4
 ```
 **macOS / Linux**
 ```bash
+pip install torch --index-url https://download.pytorch.org/whl/cpu
+pip install -r requirements-ml.txt
 pip install datasets
 ML_MODE=deberta python eval/benchmark.py --hf deepset/prompt-injections --sweep --concurrency 4
 ```
@@ -177,7 +181,7 @@ Stop with Ctrl+C, or `docker compose down`.
 | Dashboard says "backend offline" | Start the backend first; check http://localhost:8000/health |
 | PowerShell won't activate the venv | `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned` |
 | torch install is huge (2 GB+) | You missed `--index-url https://download.pytorch.org/whl/cpu`; uninstall and reinstall with it |
-| `No module named 'torch'` / benchmark says the classifier did not load | Run `pip install torch --index-url https://download.pytorch.org/whl/cpu` inside the venv |
+| `No module named 'torch'` or `'transformers'` / classifier did not load | Inside the venv: `pip install torch --index-url https://download.pytorch.org/whl/cpu`, then `pip install -r requirements-ml.txt` |
 | Every request says REQUIRE_APPROVAL with "fail-closed" | A configured stage (DeBERTa or Ollama) failed. Check `/health` for `ml_error`, or that Ollama is running |
 | Want a clean demo state | As admin: `POST /v1/demo/reset`, or delete `backend/data/*.db` and restart |
 

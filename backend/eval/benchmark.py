@@ -144,7 +144,9 @@ def main():
     if s.ml_mode != "off" and ml_classifier.get_classifier() is None:
         # fail-closed would flag every sample and produce meaningless numbers
         sys.exit(f"ERROR: ML_MODE={s.ml_mode} but the classifier did not load: {ml_classifier._clf_error}\n"
-                 "For DeBERTa install CPU torch first: pip install torch --index-url https://download.pytorch.org/whl/cpu")
+                 "For DeBERTa, inside the venv run:\n"
+                 "  pip install torch --index-url https://download.pytorch.org/whl/cpu\n"
+                 "  pip install -r requirements-ml.txt")
     print(f"classifier: {ml_classifier.get_classifier().name if s.ml_mode != 'off' else 'off'}")
     results, lat = [], []
     predict(rows[0])  # warm-up: model loading must not count as request latency
