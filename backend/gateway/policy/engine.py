@@ -24,7 +24,7 @@ from ..models import Decision, Principal, Severity, StageResult
 @lru_cache
 def load_policy(path: str | None = None) -> dict[str, Any]:
     p = Path(path or get_settings().policy_file)
-    with p.open() as f:
+    with p.open(encoding="utf-8") as f:
         return yaml.safe_load(f)
 
 

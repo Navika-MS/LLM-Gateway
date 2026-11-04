@@ -21,6 +21,10 @@ from collections import defaultdict
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
+# Windows consoles default to cp1252; never crash on printing a non-ASCII sample
+for _stream in (sys.stdout, sys.stderr):
+    if hasattr(_stream, "reconfigure"):
+        _stream.reconfigure(errors="replace")
 sys.path.insert(0, str(HERE.parent))
 os.environ.setdefault("AUDIT_DB", str(HERE / ".bench_audit.db"))
 
@@ -173,7 +177,8 @@ def main():
         "metrics": table,
         "ml_threshold_sweep": sweep,
     }
-    (HERE / "results.json").write_text(json.dumps({"summary": summary, "rows": results}, indent=1, ensure_ascii=False))
+    (HERE / "results.json").write_text(json.dumps({"summary": summary, "rows": results}, indent=1, ensure_ascii=False),
+                                      encoding="utf-8")
 
     lines = [
         "# Benchmark report", "",

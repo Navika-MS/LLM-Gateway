@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import argparse
 import re
+import sys
 
 import httpx
 
@@ -75,4 +76,12 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    for _stream in (sys.stdout, sys.stderr):
+        if hasattr(_stream, "reconfigure"):
+            _stream.reconfigure(errors="replace")  # Windows cp1252 consoles
+    try:
+        main()
+    except httpx.ConnectError:
+        sys.exit("ERROR: cannot reach the gateway. Start the backend first in another terminal:\n"
+                 "  cd backend; .venv\\Scripts\\activate; uvicorn gateway.main:app --port 8000\n"
+                 "then run this script again (or pass --gateway http://localhost:<port>).")
