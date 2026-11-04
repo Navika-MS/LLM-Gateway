@@ -26,7 +26,10 @@ from gateway.stages import conversation  # noqa: E402
 
 @pytest.fixture(autouse=True)
 def _clean_sessions():
+    from gateway.auth import reset_rate_limits
+
     conversation.store.clear()
+    reset_rate_limits()
     yield
 
 

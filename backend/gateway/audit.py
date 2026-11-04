@@ -141,6 +141,10 @@ def list_approvals(status: str | None = None) -> list[dict]:
     return out
 
 
+def peek_approval(aid: str) -> dict | None:
+    return _pending_args.get(aid)
+
+
 def decide_approval(aid: str, approver: Principal, approve: bool) -> dict | None:
     row = conn().execute("SELECT * FROM approvals WHERE id = ?", (aid,)).fetchone()
     if not row or row["status"] != "pending":

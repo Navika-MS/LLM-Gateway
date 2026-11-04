@@ -32,6 +32,12 @@ DEFAULT_API_KEYS = {
 
 @dataclass(frozen=True)
 class Settings:
+    # dev | prod. prod refuses to start with demo keys or default secrets (see production_problems)
+    env: str = "dev"
+    # requests per minute per authenticated principal (0 = unlimited)
+    rate_limit_per_min: int = 120
+    # trust a JWT's `permissions` claim on top of the role? Off by default: the role decides.
+    jwt_trust_permissions: bool = False
     # --- auth ---
     api_keys: dict = field(default_factory=lambda: DEFAULT_API_KEYS)
     jwt_secret: str = ""  # empty = JWT auth disabled
@@ -76,6 +82,9 @@ class Settings:
 def get_settings() -> Settings:
     keys_raw = os.getenv("GATEWAY_API_KEYS")
     return Settings(
+        env=_env("GATEWAY_ENV", "dev").lower(),
+        rate_limit_per_min=int(_env("RATE_LIMIT_PER_MIN", "120")),
+        jwt_trust_permissions=_env_bool("JWT_TRUST_PERMISSIONS", False),
         api_keys=json.loads(keys_raw) if keys_raw else DEFAULT_API_KEYS,
         jwt_secret=_env("GATEWAY_JWT_SECRET", ""),
         ml_mode=_env("ML_MODE", "heuristic").lower(),
@@ -98,3 +107,19 @@ def get_settings() -> Settings:
             o.strip() for o in _env("CORS_ORIGINS", ",".join(Settings.cors_origins)).split(",") if o.strip()
         ),
     )
+
+
+def production_problems(s: Settings) -> list[str]:
+    """Settings that are fine for a laptop demo but unsafe in a real deployment."""
+    problems = []
+    if any(k in DEFAULT_API_KEYS for k in s.api_keys):
+        problems.append("demo API keys are enabled (set GATEWAY_API_KEYS)")
+    if s.tokenization_secret == Settings.tokenization_secret or len(s.tokenization_secret) < 32:
+        problems.append("TOKENIZATION_SECRET is the default or shorter than 32 characters")
+    if s.jwt_secret and len(s.jwt_secret) < 32:
+        problems.append("GATEWAY_JWT_SECRET is shorter than 32 characters")
+    if "*" in s.cors_origins:
+        problems.append("CORS_ORIGINS allows any origin")
+    if s.fail_mode != "strict":
+        problems.append("FAIL_MODE is not strict")
+    return problems

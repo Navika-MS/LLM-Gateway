@@ -10,19 +10,28 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from . import __version__, audit, orchestrator
 from .auth import authenticate, require_approver
-from .config import get_settings
+from .config import get_settings, production_problems
 from .demo_scenarios import SCENARIOS
 from .models import (ContextRequest, ContextResponse, Decision, GuardResponse, OutputRequest, Principal, PromptRequest,
                      RagRequest, RagResponse, ToolCall, ToolGuardResponse)
-from .policy.engine import load_policy
+from .policy.engine import can_approve, has_permission, load_policy
 from .rag import pipeline
 from .stages import conversation, ml_classifier
 from .tools import hr_env
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 
+log = logging.getLogger("gateway")
+
+
 @asynccontextmanager
 async def lifespan(_: FastAPI):
+    s = get_settings()
+    problems = production_problems(s)
+    if problems and s.env == "prod":
+        raise RuntimeError("refusing to start with GATEWAY_ENV=prod: " + "; ".join(problems))
+    for p in problems:
+        log.warning("demo setting in use: %s", p)
     audit.conn()
     hr_env.ensure()
     yield
@@ -108,14 +117,20 @@ def approvals(status: Optional[str] = None, _: Principal = Depends(require_appro
 def decide(approval_id: str, action: str, approver: Principal = Depends(require_approver)):
     if action not in {"approve", "reject"}:
         raise HTTPException(400, "action must be approve or reject")
+    peek = audit.peek_approval(approval_id)
+    if peek is None:
+        raise HTTPException(404, "approval not found, already decided, or gateway restarted")
+    requester = Principal(**peek["principal"])
+    if requester.tenant != approver.tenant:
+        raise HTTPException(404, "approval not found, already decided, or gateway restarted")  # no cross-tenant probing
+    if action == "approve" and requester.user_id == approver.user_id:
+        # four-eyes rule: the request stays pending for someone else
+        raise HTTPException(403, "you cannot approve your own request (four-eyes rule)")
     pending = audit.decide_approval(approval_id, approver, action == "approve")
     if pending is None:
         raise HTTPException(404, "approval not found, already decided, or gateway restarted")
     if action == "reject":
         return {"status": "rejected"}
-    requester = Principal(**pending["principal"])
-    if requester.user_id == approver.user_id:
-        return {"status": "approved", "note": "self-approval recorded; tool not executed (four-eyes rule)"}
     try:
         result = hr_env.execute(pending["tool"], pending["arguments"])
     except Exception as e:
@@ -137,27 +152,42 @@ def stats(p: Principal = Depends(authenticate)):
 
 
 @app.get("/v1/policy")
-def policy(_: Principal = Depends(authenticate)):
-    return load_policy()
+def policy(p: Principal = Depends(authenticate)):
+    pol = load_policy()
+    if can_approve(p):
+        return pol
+    # everyone else sees only their own role and tools; thresholds would help an attacker tune inputs
+    return {"redacted": True, "roles": {p.role: pol["roles"].get(p.role, {})},
+            "tools": {k: v for k, v in pol["tools"].items() if has_permission(p, v.get("permission", f"tool:{k}"))},
+            "operations": pol["operations"], "thresholds": {}, "always_block_categories": []}
+
+
+def _demo_only() -> None:
+    if get_settings().env == "prod":
+        raise HTTPException(404, "demo endpoints are disabled in production")
 
 
 @app.get("/v1/demo/scenarios")
-def scenarios():
+def scenarios(_: Principal = Depends(authenticate)):
+    _demo_only()
     return SCENARIOS
 
 
 @app.get("/v1/demo/documents")
 def documents(_: Principal = Depends(authenticate)):
+    _demo_only()
     return [c.model_dump() for c in pipeline.load_docs(get_settings().docs_dir)]
 
 
 @app.get("/v1/demo/state")
 def demo_state(_: Principal = Depends(authenticate)):
+    _demo_only()
     return {"outbox": hr_env.OUTBOX, "system": hr_env.SYSTEM_STATE, "employees": len(hr_env.search_employees(limit=1000))}
 
 
 @app.post("/v1/demo/reset")
 def demo_reset(_: Principal = Depends(require_approver)):
+    _demo_only()
     hr_env.reset()
     conversation.store.clear()
     return {"status": "reset"}
