@@ -70,7 +70,7 @@ Run the tests and the attack demo:
 
 ```bash
 cd backend
-pytest -q                          # 92 tests
+pytest -q                          # 111 tests
 python scripts/demo_agent.py       # agent reads a poisoned email and tries to exfiltrate data
 python eval/benchmark.py           # writes eval/report.md
 ```
@@ -269,7 +269,7 @@ ML_MODE=deberta python eval/benchmark.py --hf deepset/prompt-injections --sweep 
 
 ## Honest status
 
-Tested here: 108 unit/API tests pass (CI runs them plus the benchmark on every push); all playground scenarios
+Tested here: 111 unit/API tests pass (CI runs them plus the benchmark on every push); all playground scenarios
 return their expected decision.
 
 Known limitations, and what an interviewer should hear about them:

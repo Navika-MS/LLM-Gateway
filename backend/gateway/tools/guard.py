@@ -24,7 +24,7 @@ from ..config import get_settings
 from ..models import Decision, Finding, Principal, Severity, StageResult, ToolCall
 from ..policy.engine import has_permission, load_policy, pii_allowed
 from ..stages import pii, signatures
-from ..stages.conversation import SessionOwnerMismatch, owner_key, store
+from ..stages.conversation import owner_key, store
 from ..stages.intent import tag_intents
 from ..stages.normalizer import normalize
 

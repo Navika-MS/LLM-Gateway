@@ -12,7 +12,9 @@ Commands are given for **Windows (PowerShell)** and **macOS/Linux**. Pick one pa
 | Docker Desktop (only for path B) | any recent | `docker --version` |
 | Ollama (optional) | any | `ollama --version` |
 
-Unzip `llm-guardrail-gateway.zip` and open a terminal in the `llm-guardrail-gateway` folder.
+Unzip `llm-guardrail-gateway.zip` into an **empty folder** (not on top of an older copy) and open a terminal in the
+`llm-guardrail-gateway` folder it creates. If you see `llm-guardrail-gateway\llm-guardrail-gateway`, use the inner one.
+Only ever run one backend at a time: close old terminals from earlier versions first.
 
 ---
 
@@ -62,7 +64,7 @@ Open http://localhost:5173. The top-right dot should be green ("ML: heuristic").
 ### A4. Tests, terminal demo, benchmark (terminal 3, venv activated, inside `backend`)
 
 ```bash
-pytest -q                          # expect: 108 passed
+pytest -q                          # expect: 111 passed
 python scripts/demo_agent.py       # needs the backend from A1 running
 python eval/benchmark.py           # writes eval/report.md
 ```
@@ -75,10 +77,12 @@ Stop the backend (Ctrl+C) first. All commands run in `backend` with the venv act
 
 ### DeBERTa prompt-injection classifier (~1 GB RAM)
 
+Install CPU-only PyTorch **first** (it is deliberately not in `requirements-ml.txt`; the default build is 2 GB+):
+
 ```bash
 pip install torch --index-url https://download.pytorch.org/whl/cpu
 pip install -r requirements-ml.txt
-python -m spacy download en_core_web_sm
+python -m spacy download en_core_web_sm      # only needed for Presidio
 ```
 
 Start the backend with the classifier enabled:
@@ -108,20 +112,24 @@ Same install as above, then add `PII_ENGINE=presidio` (Windows: `$env:PII_ENGINE
 
 Expect 1 to 3 seconds per request on CPU. If you stop Ollama, requests get REQUIRE_APPROVAL or BLOCK (fail closed), which is intended.
 
-### Benchmark with DeBERTa (please do this first)
+### Benchmark with DeBERTa
+
+Needs the DeBERTa install above (PyTorch first), then:
 
 **Windows**
 ```powershell
-$env:ML_MODE="deberta"; python eval/benchmark.py
 pip install datasets
-$env:PYTHONUTF8="1"; $env:ML_MODE="deberta"; python eval/benchmark.py --hf deepset/prompt-injections --sweep --concurrency 4
+$env:PYTHONUTF8="1"; $env:ML_MODE="deberta"
+python eval/benchmark.py --hf deepset/prompt-injections --sweep --concurrency 4
 ```
 **macOS / Linux**
 ```bash
-ML_MODE=deberta python eval/benchmark.py
 pip install datasets
 ML_MODE=deberta python eval/benchmark.py --hf deepset/prompt-injections --sweep --concurrency 4
 ```
+
+The first line must say `classifier: protectai/deberta-v3-base-prompt-injection-v2`. If the model can't load, the
+benchmark stops with an error instead of printing meaningless numbers.
 
 The terminal prints one line per suite (`builtin`, `challenge`, `holdout`, `deepset/prompt-injections`); never
 quote a pooled number. `eval/report.md` adds the threshold sweep and every misclassified sample. Put the per-suite
@@ -162,10 +170,13 @@ Stop with Ctrl+C, or `docker compose down`.
 | Problem | Fix |
 |---|---|
 | `uvicorn: command not found` | The venv isn't active. Run the activate command again, or use `python -m uvicorn ...` |
-| Port 8000 or 5173 already in use | `uvicorn ... --port 8001`, then run the UI with `GATEWAY_URL=http://localhost:8001 npm run dev` |
+| Port 8000 already in use (`WinError 10048`) | An old backend is still running. Close its terminal, or on Windows: `netstat -ano \| findstr :8000`, then `taskkill /PID <number> /F` |
+| UI shows `Unexpected token ... is not valid JSON` | You are running an old build, or the backend is down. Use the latest zip; it shows the real error instead |
+| Every prompt suddenly needs approval after testing many attacks | Per-user probing protection (10 blocked requests in 10 minutes). As admin: `POST /v1/demo/reset`, or restart the backend |
 | Dashboard says "backend offline" | Start the backend first; check http://localhost:8000/health |
 | PowerShell won't activate the venv | `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned` |
 | torch install is huge (2 GB+) | You missed `--index-url https://download.pytorch.org/whl/cpu`; uninstall and reinstall with it |
+| `No module named 'torch'` / benchmark says the classifier did not load | Run `pip install torch --index-url https://download.pytorch.org/whl/cpu` inside the venv |
 | Every request says REQUIRE_APPROVAL with "fail-closed" | A configured stage (DeBERTa or Ollama) failed. Check `/health` for `ml_error`, or that Ollama is running |
 | Want a clean demo state | As admin: `POST /v1/demo/reset`, or delete `backend/data/*.db` and restart |
 
