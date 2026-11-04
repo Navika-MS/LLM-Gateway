@@ -36,7 +36,7 @@ INTENTS: dict[str, tuple[list[str], float]] = {
     "sensitive_selection": ([r"\b(?:records?|rows?|entries|employees?|customers?)\b.{0,40}\b(?:payment|card|salary|salaries|bank|aadhaar|pan|ssn|passport|medical|password|credential|personal)", r"\b(?:payment|card|salary|bank|aadhaar|pan|personal)\s+(?:info(?:rmation)?|details|data|numbers?)"], 0.3),
     "data_staging": ([r"\b(?:prepare|create|build|generate|compile|package|zip|bundle)\b.{0,20}\b(?:an?\s+)?(?:export|dump|archive|csv|spreadsheet|extract|backup|file)", r"\bexport\b"], 0.4),
     "external_transfer": ([r"\b(?:send|email|forward|upload|share|transfer|post|leak)\b(?!\s+me\b).{0,60}(?:@(?!acme\.(?:com|internal)\b)[\w-]+\.|https?://(?!(?:[\w-]+\.)*acme\.)|external|outside|personal|this\s+address|that\s+address|gmail|dropbox|google\s+drive|pastebin)"], 0.6),
-    "modification": ([r"\b(?:update|modify|change|edit|alter|set)\b.{0,30}\b(?:record|field|value|salary|payroll|account|setting|config)"], 0.3),
+    "modification": ([r"\b(?:update|modify|change|edit|alter|set|correct)\b.{0,30}\b(?:records?|fields?|values?|salary|payroll|account|settings?|config|title|designation|department|name|phone|address|email|details|profile|role|manager)\b"], 0.3),
     "deletion": ([r"\b(?:delete|remove|drop|erase|wipe|purge|truncate)\b"], 0.4),
     "privilege_change": ([r"\b(?:grant|elevate|promote|admin(?:istrator)?\s+(?:account|access|rights)|superuser|root\s+access|add\s+(?:me|user)\s+to\s+(?:the\s+)?(?:admin|sudo))"], 0.6),
     "security_tampering": ([r"\b(?:disable|turn\s+off|bypass|stop|clear)\b.{0,20}\b(?:audit|logging|logs|monitoring|alert|firewall|mfa|security)"], 0.8),

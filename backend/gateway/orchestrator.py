@@ -48,13 +48,13 @@ def guard_prompt(req: PromptRequest, p: Principal, *, endpoint: str = "/v1/guard
         it = intent.scan(norm.normalized + "\n" + "\n".join(norm.views.values()))
         stages.append(it)
         intents = set(it.details.get("intents", [])) or set(intent.tag_intents(norm.normalized))
-    stages.append(conversation.assess(req.session_id, intents))
+    stages.append(conversation.assess(req.session_id, intents, conversation.owner_key(p)))
 
     if stages[0].findings:
         decision, risk, reasons = Decision.BLOCK, 1.0, [f"not authorized: {stages[0].findings[0].message}"]
     else:
         decision, risk, reasons = engine.evaluate(p, stages)
-    conversation.record(req.session_id, intents, decision == Decision.BLOCK)
+    conversation.record(req.session_id, intents, decision == Decision.BLOCK, conversation.owner_key(p))
 
     sanitized = None
     if decision == Decision.SANITIZE:
@@ -75,8 +75,16 @@ def guard_context(req: ContextRequest, p: Principal, *, log: bool = True) -> Con
     rid = audit.new_id()
     res, verdicts, safe = ctx_stage.scan(req.chunks, req.user_query)
     quarantined = [v.id for v in verdicts if v.action == "quarantine"]
-    if req.session_id and (quarantined or any(v.action == "sanitize" for v in verdicts)):
-        conversation.store.mark_tainted(req.session_id, quarantined)
+    if req.session_id:
+        try:
+            if quarantined or any(v.action == "sanitize" for v in verdicts):
+                conversation.store.mark_tainted(req.session_id, quarantined, conversation.owner_key(p))
+            else:
+                conversation.store.get(req.session_id, conversation.owner_key(p))  # bind the session
+        except conversation.SessionOwnerMismatch:
+            return ContextResponse(request_id=rid, decision=Decision.BLOCK, risk_score=1.0,
+                                   reasons=["session id belongs to a different principal"], chunks=verdicts,
+                                   safe_context="", latency_ms=round((time.perf_counter() - t0) * 1000, 2))
     if quarantined or res.details["sanitized"]:
         decision = Decision.SANITIZE
         reasons = [f.message for f in res.findings]

@@ -70,7 +70,10 @@ def test_scenarios_match_expectations(client):
 
     url = {"prompt": "/v1/guard/prompt", "rag": "/v1/rag/query", "context": "/v1/guard/context",
            "tool": "/v1/guard/tool", "output": "/v1/guard/output"}
+    from gateway.stages.conversation import store
+
     for s in SCENARIOS:
+        store._user_blocks.clear()  # scenarios are independent demos; per-user probing must not carry over
         r = client.post(url[s["mode"]], json=s["body"], headers={"X-API-Key": s.get("key", "demo-employee-key")})
         assert r.status_code == 200, s["id"]
         assert r.json()["decision"] == s["expect"], s["id"]

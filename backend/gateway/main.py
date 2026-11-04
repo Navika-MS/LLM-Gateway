@@ -51,6 +51,12 @@ def whoami(p: Principal = Depends(authenticate)) -> Principal:
     return p
 
 
+@app.post("/v1/sessions")
+def open_session(p: Principal = Depends(authenticate)) -> dict:
+    """Open a gateway-owned session bound to the caller. Agents pass its id on every guard call."""
+    return {"session_id": conversation.store.open(conversation.owner_key(p)), "ttl_s": conversation.store.ttl}
+
+
 # ---------------- guard endpoints (use from any app / framework) ----------------
 
 @app.post("/v1/guard/prompt", response_model=GuardResponse)

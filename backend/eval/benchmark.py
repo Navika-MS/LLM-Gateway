@@ -27,6 +27,7 @@ os.environ.setdefault("AUDIT_DB", str(HERE / ".bench_audit.db"))
 from gateway.config import get_settings  # noqa: E402
 from gateway.models import ContextChunk, ContextRequest, Decision, Principal, PromptRequest  # noqa: E402
 from gateway import orchestrator  # noqa: E402
+from gateway.stages import conversation  # noqa: E402
 
 EMPLOYEE = Principal(user_id="bench", role="employee", tenant="bench")
 FLAGGED = {Decision.BLOCK, Decision.REQUIRE_APPROVAL}
@@ -34,6 +35,7 @@ FLAGGED = {Decision.BLOCK, Decision.REQUIRE_APPROVAL}
 
 def predict(row: dict) -> tuple[bool, float, float | None]:
     """Return (flagged, latency_ms, ml_score). ml_score is the classifier's top P(injection), if it ran."""
+    conversation.store.clear()  # every sample is an independent request; no probing state carries over
     t0 = time.perf_counter()
     ml = None
     if row["kind"] == "context":

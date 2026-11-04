@@ -24,7 +24,7 @@ from ..config import get_settings
 from ..models import Decision, Finding, Principal, Severity, StageResult, ToolCall
 from ..policy.engine import has_permission, load_policy, pii_allowed
 from ..stages import pii, signatures
-from ..stages.conversation import store
+from ..stages.conversation import SessionOwnerMismatch, owner_key, store
 from ..stages.intent import tag_intents
 from ..stages.normalizer import normalize
 
@@ -178,13 +178,25 @@ def guard(call: ToolCall, principal: Principal) -> tuple[Decision, float, list[s
     if arg_d != Decision.ALLOW:
         bump(arg_d, "argument check: " + "; ".join(f.message for f in arg_f[:3]))
 
-    # taint
+    # taint. The agent being guarded supplies session_id/context_ids, so a compromised agent
+    # could simply omit them. Sensitive actions therefore need a session the gateway itself
+    # knows and that belongs to this principal; anything else is unverifiable -> approval.
     t0 = time.perf_counter()
     taint_f = []
-    if call.session_id:
-        sess = store.get(call.session_id)
+    sensitive = cfg["action"] in pol["taint_sensitive_actions"]
+    strict = get_settings().require_session
+    sess = store.peek(call.session_id) if call.session_id else None
+    if sess is not None and sess.owner not in (None, owner_key(principal)):
+        taint_f.append(_f("tool_taint", "TAINT_SESSION_HIJACK", Severity.CRITICAL, "session id belongs to a different principal"))
+        bump(Decision.BLOCK, "session id belongs to a different principal")
+    elif sensitive and sess is None and strict:
+        why = "no session id" if not call.session_id else "session unknown to the gateway"
+        taint_f.append(_f("tool_taint", "TAINT_UNVERIFIABLE", Severity.HIGH,
+                          f"{why}: the gateway cannot verify what the agent read before this call"))
+        bump(Decision.REQUIRE_APPROVAL, f"{why}; sensitive action needs a gateway session (POST /v1/sessions) or approval")
+    if sess is not None and sess.owner in (None, owner_key(principal)):
         bad_ctx = set(call.context_ids) & sess.quarantined_ids
-        if cfg["action"] in pol["taint_sensitive_actions"]:
+        if sensitive:
             if bad_ctx:
                 taint_f.append(_f("tool_taint", "TAINT_QUARANTINED_CONTEXT", Severity.CRITICAL,
                                   f"call was planned with quarantined context {sorted(bad_ctx)}", "indirect_injection"))
@@ -198,6 +210,10 @@ def guard(call: ToolCall, principal: Principal) -> tuple[Decision, float, list[s
     t0 = time.perf_counter()
     align_f = []
     needed = ACTION_JUSTIFIED_BY.get(cfg["action"])
+    if call.user_request is None and needed and get_settings().require_session:
+        align_f.append(_f("tool_alignment", "ALIGN_NO_USER_REQUEST", Severity.HIGH,
+                          f"no user_request supplied; cannot check that a human asked for '{cfg['action']}'"))
+        bump(Decision.REQUIRE_APPROVAL, "sensitive action without the user's original request")
     if call.user_request is not None and needed:
         user_intents = set(tag_intents(call.user_request))
         if not (user_intents & needed):

@@ -52,6 +52,8 @@ class Settings:
     # fail_mode: strict = any errored stage => REQUIRE_APPROVAL at minimum
     #            balanced = errored stage only escalates medium/high-risk requests
     fail_mode: str = "strict"
+    # sensitive tool calls need a gateway-known session and the user's request; otherwise approval
+    require_session: bool = True
 
     # --- data protection ---
     tokenization_secret: str = "change-me-in-production"
@@ -85,6 +87,7 @@ def get_settings() -> Settings:
         ollama_timeout_s=float(_env("OLLAMA_TIMEOUT_S", "20")),
         pii_engine=_env("PII_ENGINE", "regex").lower(),
         fail_mode=_env("FAIL_MODE", "strict").lower(),
+        require_session=_env_bool("REQUIRE_SESSION", True),
         tokenization_secret=_env("TOKENIZATION_SECRET", Settings.tokenization_secret),
         audit_db=_env("AUDIT_DB", Settings.audit_db),
         hr_db=_env("HR_DB", Settings.hr_db),

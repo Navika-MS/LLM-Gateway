@@ -36,7 +36,7 @@ def main() -> None:
     ap.add_argument("--gateway", default="http://localhost:8000")
     args = ap.parse_args()
     c = httpx.Client(base_url=args.gateway, headers=HR_KEY, timeout=30)
-    session = "demo-agent-run"
+    session = c.post("/v1/sessions").json()["session_id"]  # gateway-owned session, bound to this key
     user_request = "Summarize the vendor invoice email for October."
 
     banner(f"Employee asks the agent: {user_request!r}")
