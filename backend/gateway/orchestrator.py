@@ -45,7 +45,8 @@ def guard_prompt(req: PromptRequest, p: Principal, *, endpoint: str = "/v1/guard
         stages.append(StageResult(name="ml_classifier", status="skipped",
                                   details={"reason": "deterministic stage already blocked (fast path)"}))
     else:
-        stages.append(ml_classifier.scan(norm))
+        sig_attack = any(f.category in signatures.ATTACK_CATEGORIES for f in sig.findings)
+        stages.append(ml_classifier.overrule_if_benign(ml_classifier.scan(norm), sig_attack, norm.normalized))
     if hard_block:
         stages.append(StageResult(name="intent", status="skipped", details={"reason": "deterministic stage already blocked (fast path)"}))
         intents = set(intent.tag_intents(norm.normalized))

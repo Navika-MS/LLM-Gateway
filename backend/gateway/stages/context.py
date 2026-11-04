@@ -116,6 +116,14 @@ def inspect_chunk(chunk: ContextChunk, user_query: str) -> tuple[ChunkVerdict, l
                                                                chunk.trust)
     obf = [f for f in norm.findings if f.severity in (Severity.MEDIUM, Severity.HIGH)]
 
+    if (chunk.trust in {"trusted", "internal"} and ml.status == "ok" and ml.findings
+            and not sig.findings and not ia_findings and not obf):
+        # A trusted internal document flagged by the classifier alone: procedures and policies
+        # ("Step 1: install the app", "you are required to enable MFA") read like instructions.
+        # Keep the score visible but don't let the model alone sanitize or quarantine it.
+        ml.findings = [Finding(stage="context_ml", category="ml_overruled", rule_id="ML_TRUSTED_SOURCE", severity=Severity.LOW,
+                               message=f"classifier score {ml.risk:.2f} on a {chunk.trust} source with no other signal")]
+        ml.risk = min(ml.risk, s_th - 0.01)
     findings = obf + sig.findings + ml.findings + ia_findings
     risk = max(sig.risk, ml.risk if ml.status == "ok" else 0.0, ia_risk)
     if obf and risk > 0.3:

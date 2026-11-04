@@ -181,3 +181,29 @@ def scan(norm: NormalizedText, *, stage_name: str = STAGE, threshold: float | No
         latency_ms=round((time.perf_counter() - t0) * 1000, 2),
         details={"model": clf.name, "threshold": threshold, "scores_by_view": per_view},
     )
+
+
+# ---------------- known benign phrasings the model over-scores ----------------
+# DeBERTa scores "ignore the typos" or "my instructions for the expense form" at >0.99, so
+# no threshold separates them (see the threshold sweep in eval/report.md). When the model is
+# the ONLY stage that objects and the text matches one of these narrow phrasings, its verdict
+# is downgraded. Any signature hit (e.g. "...and ignore all previous instructions") still blocks.
+BENIGN_ML_CONTEXT = re.compile(
+    r"\b(?:ignore|disregard|skip|never\s+mind)\s+(?:the\s+|my\s+|any\s+|all\s+(?:the\s+)?)?"
+    r"(?:typos?|spelling(?:\s+mistakes)?|formatting|format|noise|warnings?|case|grammar|"
+    r"(?:previous|last|earlier|above|old|first)\s+(?:email|e-mail|mail|message|thread|reply|draft|version|attachment|"
+    r"paragraph|sentence|line|question)s?(?:\s+thread)?)\b"
+    r"|\b(?:my|the|our)\s+instructions\s+(?:for|on|about)\s+(?:the\s+|my\s+|this\s+|our\s+)?(?:\w+\s+){0,2}?"
+    r"(?:form|tool|process|portal|machine|app|claim|request|setup|laptop|printer)\b",
+    re.I)
+
+
+def overrule_if_benign(ml: StageResult, other_attack_findings: bool, text: str) -> StageResult:
+    """Downgrade an ML-only verdict on a known benign phrasing. Returns the (possibly) modified stage."""
+    if ml.status != "ok" or other_attack_findings or not ml.findings or not BENIGN_ML_CONTEXT.search(text):
+        return ml
+    ml.findings = [Finding(stage=ml.name, category="ml_overruled", rule_id="ML_BENIGN_CONTEXT", severity=Severity.LOW,
+                           message=f"classifier score {ml.risk:.2f} overruled: known benign phrasing and no other stage objected")]
+    ml.details["overruled"] = True
+    ml.risk = min(ml.risk, 0.2)
+    return ml
