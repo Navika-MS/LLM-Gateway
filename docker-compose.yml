@@ -14,6 +14,9 @@ services:
       PII_ENGINE: ${PII_ENGINE:-regex}          # regex | presidio (needs INSTALL_ML=true)
       RAG_LLM: ${RAG_LLM:-extractive}           # extractive | ollama
       FAIL_MODE: ${FAIL_MODE:-strict}
+      GATEWAY_ENV: ${GATEWAY_ENV:-dev}
+      REQUIRE_SESSION: ${REQUIRE_SESSION:-true}
+      RATE_LIMIT_PER_MIN: ${RATE_LIMIT_PER_MIN:-120}
       OLLAMA_URL: http://ollama:11434
       OLLAMA_MODEL: ${OLLAMA_MODEL:-qwen2.5:1.5b}
       TOKENIZATION_SECRET: ${TOKENIZATION_SECRET:-change-me-in-production}

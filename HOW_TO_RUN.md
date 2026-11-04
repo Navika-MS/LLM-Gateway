@@ -62,7 +62,7 @@ Open http://localhost:5173. The top-right dot should be green ("ML: heuristic").
 ### A4. Tests, terminal demo, benchmark (terminal 3, venv activated, inside `backend`)
 
 ```bash
-pytest -q                          # expect: 92 passed
+pytest -q                          # expect: 108 passed
 python scripts/demo_agent.py       # needs the backend from A1 running
 python eval/benchmark.py           # writes eval/report.md
 ```
@@ -114,16 +114,18 @@ Expect 1 to 3 seconds per request on CPU. If you stop Ollama, requests get REQUI
 ```powershell
 $env:ML_MODE="deberta"; python eval/benchmark.py
 pip install datasets
-$env:ML_MODE="deberta"; python eval/benchmark.py --hf deepset/prompt-injections
+$env:PYTHONUTF8="1"; $env:ML_MODE="deberta"; python eval/benchmark.py --hf deepset/prompt-injections --sweep --concurrency 4
 ```
 **macOS / Linux**
 ```bash
 ML_MODE=deberta python eval/benchmark.py
 pip install datasets
-ML_MODE=deberta python eval/benchmark.py --hf deepset/prompt-injections
+ML_MODE=deberta python eval/benchmark.py --hf deepset/prompt-injections --sweep --concurrency 4
 ```
 
-Results land in `eval/report.md`; put the numbers into the README's Evaluation table.
+The terminal prints one line per suite (`builtin`, `challenge`, `holdout`, `deepset/prompt-injections`); never
+quote a pooled number. `eval/report.md` adds the threshold sweep and every misclassified sample. Put the per-suite
+numbers into the README's Evaluation section.
 
 ---
 

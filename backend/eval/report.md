@@ -2,7 +2,7 @@
 
 Config: `ML_MODE=heuristic`, `INTENT_MODE=heuristic`, `PII_ENGINE=regex`, split `all`, 263 samples.
 
-Latency per request: p50 0.31 ms, p95 0.6 ms; throughput 1892.1 requests/s with 8 concurrent callers.
+Latency per request: p50 0.26 ms, p95 0.49 ms.
 
 > How to read this: every dataset (suite) is reported separately and never pooled. `builtin` was written by the same person who wrote the rules (tuned on its `dev` split only), so its numbers are optimistic. `challenge` is a held-out set of harder attacks that was never used for tuning. Public sets (`--hf ...`) are the independent check.
 
@@ -13,31 +13,6 @@ Latency per request: p50 0.31 ms, p95 0.6 ms; throughput 1892.1 requests/s with 
 | **builtin** | 198 | 1.000 | 0.977 | 0.989 | 0.000 | 0.985 |
 | **challenge** | 39 | 1.000 | 1.000 | 1.000 | 0.000 | 1.000 |
 | **holdout** | 26 | 1.000 | 0.333 | 0.500 | 0.000 | 0.615 |
-
-## ML classifier alone, by threshold
-
-Prompt samples only; shows the precision/recall trade-off behind `ML_THRESHOLD`.
-
-| Suite | Threshold | Precision | Recall | FPR |
-|---|---|---|---|---|
-| builtin | 0.3 | 1.000 | 0.441 | 0.000 |
-| builtin | 0.5 | 1.000 | 0.220 | 0.000 |
-| builtin | 0.7 | 1.000 | 0.102 | 0.000 |
-| builtin | 0.85 | 1.000 | 0.076 | 0.000 |
-| builtin | 0.95 | – | 0.000 | 0.000 |
-| builtin | 0.99 | – | 0.000 | 0.000 |
-| challenge | 0.3 | 1.000 | 0.222 | 0.000 |
-| challenge | 0.5 | 1.000 | 0.111 | 0.000 |
-| challenge | 0.7 | 1.000 | 0.111 | 0.000 |
-| challenge | 0.85 | 1.000 | 0.111 | 0.000 |
-| challenge | 0.95 | 1.000 | 0.056 | 0.000 |
-| challenge | 0.99 | 1.000 | 0.056 | 0.000 |
-| holdout | 0.3 | 0.667 | 0.167 | 0.125 |
-| holdout | 0.5 | 1.000 | 0.167 | 0.000 |
-| holdout | 0.7 | 1.000 | 0.083 | 0.000 |
-| holdout | 0.85 | – | 0.000 | 0.000 |
-| holdout | 0.95 | – | 0.000 | 0.000 |
-| holdout | 0.99 | – | 0.000 | 0.000 |
 
 ## Breakdown
 

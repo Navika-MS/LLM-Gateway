@@ -154,16 +154,36 @@ out = gw.post("/v1/guard/output", json={"text": answer, "canary": my_canary}).js
 return out["sanitized_text"] or "Response withheld by the security gateway."
 ```
 
-For agents, send every proposed tool call to `/v1/guard/tool` (or `/v1/tools/execute` in the demo HR system)
-with `session_id`, the `context_ids` the agent had in view, and the original `user_request`.
+For agents, open a gateway session first and use it on every call:
+
+```python
+sid = gw.post("/v1/sessions").json()["session_id"]          # bound to this API key / user
+gw.post("/v1/guard/context", json={"user_query": q, "session_id": sid, "chunks": chunks})
+gw.post("/v1/guard/tool", json={"tool": "send_email", "arguments": {...}, "session_id": sid,
+                                "context_ids": ids_in_view, "user_request": q})
+```
+
+The session belongs to the gateway, not the agent. Sensitive tools (update, delete, send, export, admin) without a
+session the gateway knows, or without the user's request, go to human approval instead of skipping the taint check,
+so a compromised agent can't dodge it by leaving fields out. A session presented by a different user is blocked.
+Set `REQUIRE_SESSION=false` only for integrations that cannot pass sessions.
 
 JWT is also supported: set `GATEWAY_JWT_SECRET` and send `Authorization: Bearer <HS256 token>` with `sub`, `role`,
-`tenant` and `exp` claims.
+`tenant` and `exp` claims. The role decides permissions; a `permissions` claim is ignored unless
+`JWT_TRUST_PERMISSIONS=true` (and `*` is never accepted from a token).
+
+### Deploying beyond a laptop
+
+Set `GATEWAY_ENV=prod`. The gateway then **refuses to start** while demo API keys, the default
+`TOKENIZATION_SECRET`, a short JWT secret, `CORS_ORIGINS=*` or `FAIL_MODE=balanced` are in use, and the
+`/v1/demo/*` endpoints are switched off. In dev mode the same checks are logged as warnings. Every principal is
+rate-limited (`RATE_LIMIT_PER_MIN`, default 120). Non-admins get a redacted `/v1/policy` without thresholds.
 
 ## API
 
 | Method | Path | Purpose |
 |---|---|---|
+| POST | `/v1/sessions` | Open a gateway-owned session bound to the caller |
 | POST | `/v1/guard/prompt` | Inspect a user prompt |
 | POST | `/v1/guard/context` | Inspect retrieved chunks (indirect injection) |
 | POST | `/v1/guard/tool` | Authorize an agent tool call |
@@ -172,7 +192,7 @@ JWT is also supported: set `GATEWAY_JWT_SECRET` and send `Authorization: Bearer 
 | POST | `/v1/tools/execute` | Mode 2 demo: guard + execute against the fake HR database |
 | GET/POST | `/v1/approvals`, `/v1/approvals/{id}/approve\|reject` | Human approval queue (four-eyes: no self-approval) |
 | GET | `/v1/audit`, `/v1/stats` | Redacted audit log and metrics |
-| GET | `/v1/policy` | Current policy |
+| GET | `/v1/policy` | Current policy (full for admins, redacted for everyone else) |
 | GET | `/v1/demo/scenarios`, `/v1/demo/documents`, `/v1/demo/state` | Demo data |
 
 Interactive docs at `http://localhost:8000/docs`.
@@ -194,44 +214,58 @@ Or run `python scripts/demo_agent.py` for the same story in the terminal.
 
 ## Evaluation
 
-`backend/eval/dataset.jsonl` has 198 samples: 118 attack prompts across categories A, C, E, F (including 48
-obfuscated variants), 50 hard benign prompts ("ignore the typos", "how do I delete a draft?", "explain prompt
-injection"), and 30 document chunks (15 clean, 15 poisoned). Each sample has a fixed dev/test split. Rules were tuned
-on **dev only**.
+Every dataset is reported **separately**. An earlier version pooled the hand-written set with deepset, which hid
+how weak the public-set result was.
 
-Current numbers (core config: `ML_MODE=heuristic`, no DeBERTa), from `eval/report.md`:
+| Suite | n | What it is | Tuned on it? |
+|---|---|---|---|
+| `builtin` | 198 | 133 attacks (incl. 48 obfuscated), 50 hard benign prompts, 30 document chunks | yes, `dev` split only |
+| `challenge` | 39 | multilingual, ROT13, role-play personas, acrostic extraction, polite indirect injections, benign "you must" policy docs | yes: written from a review of failures, then fixed |
+| `holdout` | 26 | new phrasings written **after** the fixes | **never** |
+| `--hf deepset/prompt-injections` | 116 | public test split (English + German) | never |
 
-| Split | n | Precision | Recall | False-positive rate |
-|---|---|---|---|---|
-| dev (tuned on) | 96 | 1.000 | 1.000 | 0.000 |
-| **test (held out)** | 102 | 1.000 | 0.946 | 0.000 |
+Heuristic mode (`ML_MODE=heuristic`, no model download), from `eval/report.md`:
 
-Read these with care: the same person wrote the rules and the dataset, so they overstate real-world accuracy. The
-misses on the test split are listed at the bottom of `eval/report.md`. For an independent check run:
+| Suite | Precision | Recall | FPR |
+|---|---|---|---|
+| builtin | 1.000 | 0.977 | 0.000 |
+| challenge (before fixes) | – | 0.000 | 0.375 |
+| challenge (after fixes) | 1.000 | 1.000 | 0.000 |
+| **holdout** | 1.000 | **0.333** | 0.000 |
+
+The holdout row is the honest one: rules fixed the classes they were written for and generalise poorly to new
+phrasings. That is the reason the gateway does not rely on text filters alone. Tool authorization, gateway-owned
+taint tracking and output DLP are designed to hold when a prompt gets through.
+
+DeBERTa run on a 16 GB laptop, CPU only (2026-11-03, before the per-suite split): `builtin` precision 0.971,
+recall 1.000, FPR 6.2%, p50 214 ms. On deepset alone, derived from the pooled run, recall was about 0.37 with no
+false positives; the model is English-focused and misses most German prompts. Re-run to get exact per-suite numbers:
 
 ```bash
 pip install datasets
-python eval/benchmark.py --hf deepset/prompt-injections            # public set, includes German prompts
-ML_MODE=deberta python eval/benchmark.py --hf deepset/prompt-injections
+ML_MODE=deberta python eval/benchmark.py --hf deepset/prompt-injections --sweep --concurrency 4
 ```
 
-Regenerate or extend the dataset with `python eval/build_dataset.py`.
+`--sweep` adds a classifier-only precision/recall table per threshold (to choose `ML_THRESHOLD` on evidence),
+`--concurrency N` measures requests per second. Regenerate the dataset with `python eval/build_dataset.py`.
 
 ## Honest status
 
-What is tested here: all 92 unit/API tests pass; all 27 playground scenarios return their expected decision; the
-UI was driven in a headless browser; both Docker images were built and run end to end.
+Tested here: 108 unit/API tests pass (CI runs them plus the benchmark on every push); all playground scenarios
+return their expected decision.
 
-What is **not** verified in this repo yet:
+Known limitations, and what an interviewer should hear about them:
 
-- **DeBERTa was not run against the real model.** The build environment couldn't reach Hugging Face, so the wrapper
-  (windowing, label mapping, fail-closed) is tested with a fake tokenizer and pipeline. The first real run on your
-  laptop is the actual test; please run the benchmark with `ML_MODE=deberta` and update the numbers above.
-- **Presidio and Ollama paths were not run** for the same reason. The Ollama-down fail-closed path *is* tested.
-- Public-dataset numbers (deepset, BIPIA, JailbreakBench) are not in the report yet.
-- Session state and pending approvals live in process memory: they reset on restart and won't work across several
-  gateway replicas (Redis is the next step).
-- The demo HR "database" and email outbox are fake. Nothing is really sent.
+- **Rule-based detection does not generalise** (holdout recall 0.33 in heuristic mode). The non-English rules are a
+  stopgap; a multilingual classifier is the real fix.
+- **DeBERTa costs ~200 ms per request on CPU.** The stage is skipped once a rule has already blocked, identical
+  views are scored once, and all views go to the model in one batched call. ONNX + int8 quantisation is next.
+- **Presidio and Ollama were not run against real models** in this repo; only their fail-closed paths are tested.
+- **The gateway can only taint what it sees.** If an agent fetches documents without passing them through
+  `/v1/guard/context`, the gateway cannot know they were poisoned. Routing retrieval through `/v1/rag/query` closes
+  that gap.
+- Sessions, rate limits and pending approvals live in process memory: they reset on restart and are not shared
+  across replicas (Redis next). The HR database and outbox are fake.
 
 ## Project layout
 
@@ -257,7 +291,7 @@ docker-compose.yml
 
 ## Roadmap
 
-1. Run and publish DeBERTa + public-dataset benchmarks.
+1. Publish per-suite DeBERTa numbers; add a multilingual classifier option; ONNX int8 for latency.
 2. Move policies to OPA/Rego (the YAML is already shaped as policy data).
 3. Redis for sessions/approvals, Postgres for the audit log.
 4. Fine-tune a small classifier on indirect-injection data (BIPIA) for the context stage.

@@ -1,0 +1,57 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: backend/requirements*.txt
+      - run: pip install -r requirements.txt -r requirements-dev.txt
+      - name: Tests
+        run: python -m pytest -q
+      - name: Benchmark (heuristic mode, per suite)
+        env:
+          AUDIT_DB: /tmp/bench-audit.db
+        run: |
+          python eval/benchmark.py | tee bench.txt
+          echo '### Benchmark (heuristic mode)' >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          cat bench.txt >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+      - name: Benchmark must not regress
+        run: |
+          python - <<'PY'
+          import json
+          s = json.load(open("eval/results.json"))["summary"]["suites"]
+          b = s["builtin"]
+          assert b["recall"] >= 0.95 and b["false_positive_rate"] <= 0.02, b
+          for name, m in s.items():
+              assert (m["false_positive_rate"] or 0) <= 0.05, (name, m)
+          print("benchmark gates passed")
+          PY
+
+  frontend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - run: npm run build
