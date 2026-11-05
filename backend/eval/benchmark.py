@@ -190,7 +190,7 @@ def main():
         + (f"; throughput {rps} requests/s with {args.concurrency} concurrent callers." if rps else ".") + "", "",
         "> How to read this: every dataset (suite) is reported separately and never pooled. "
         "`builtin` was written by the same person who wrote the rules (tuned on its `dev` split only), so its numbers "
-        "are optimistic. `challenge` is a held-out set of harder attacks that was never used for tuning. "
+        "are optimistic. `challenge` holds harder attacks written from a review of failures and then fixed, so it is optimistic too. `holdout` was written after those fixes and never used for tuning. "
         "Public sets (`--hf ...`) are the independent check.", "",
         "## Per dataset", "",
         "| Suite | n | Precision | Recall | F1 | FPR | Accuracy |", "|---|---|---|---|---|---|---|",

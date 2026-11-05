@@ -61,7 +61,7 @@ So an employee asking to delete records is blocked, an admin gets an approval re
 
 ## Context security (`stages/context.py`)
 
-The hardest threat in the blueprint. For each retrieved chunk:
+The hardest threat to defend against. For each retrieved chunk:
 
 1. Normalize and run the attack signatures (operation words are normal in documents and are ignored here).
 2. Run the ML classifier.
