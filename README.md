@@ -238,7 +238,7 @@ authorization, gateway-owned taint tracking and output DLP are designed to hold 
 
 Suite definitions, the threshold sweep, the false-alarm fix and how to reproduce: [docs/EVALUATION.md](docs/EVALUATION.md).
 
-## Honest status
+## Limitations and nex steps
 
 Tested here: 111 unit/API tests pass (CI runs them plus the benchmark on every push); all playground scenarios
 return their expected decision.
