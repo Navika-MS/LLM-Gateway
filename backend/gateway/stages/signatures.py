@@ -113,7 +113,7 @@ RULES: list[Rule] = [
 
     # ---------------- non-English overrides (stopgap) ----------------
     # The DeBERTa model is English-focused. These cover the most common phrasings in a few
-    # languages; a multilingual classifier is the real fix (see README, "Known limitations").
+    # languages; a multilingual classifier is the real fix (see README, "Limitations and next steps").
     R("INJ_MULTILINGUAL_OVERRIDE", "direct_injection", H,
       r"\b(?:ignor(?:ez|e|a|iere|eer)|oubliez|olvida|vergiss|negeer|dimentica|esque[cç]a)\b.{0,30}"
       r"\b(?:instructions?|instrucciones|instru[cç][õo]es|istruzioni|anweisungen|instructies|consignes|r[eè]gles|regeln|reglas)\b"

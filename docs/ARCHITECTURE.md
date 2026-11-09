@@ -114,9 +114,13 @@ beacon), and flagging of instructions aimed at downstream agents.
 
 ## Known limitations
 
-- Regex signatures are English-centric. Multilingual attacks rely on the ML classifier.
+- Regex signatures are mostly English. A few override and prompt-extraction phrasings are covered in French,
+  Spanish, German, Dutch, Italian, Portuguese and Hindi as a stopgap; DeBERTa is English-focused too, so a
+  multilingual classifier is the real fix (most deepset misses are German).
 - The heuristic classifier is a stand-in; DeBERTa is the intended production stage.
 - Character-split attacks without word separators are only caught for a few phrasings (`compact` rules).
-- Sessions and approvals are in-memory (single replica).
-- The context engine's instruction detector can flag legitimate how-to documents that address the reader as "you
-  must"; trust levels and thresholds in `policies.yaml` are the tuning knobs.
+- Sessions, rate limits and the arguments of pending approvals are in memory (single replica); approval records
+  and the audit log are in SQLite.
+- The context engine only flags instructions aimed at the AI or meant to be hidden from the user, so plain "you
+  must" policy documents pass. An injection written as ordinary reader-facing advice can still get through it;
+  the tool guard is the backstop.

@@ -4,7 +4,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 ![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue)
 
-**112 tests · DeBERTa holdout recall 0.80 at 0% false positives · p95 346 ms on a CPU-only laptop ·
+**112 tests · DeBERTa holdout recall 0.80 (12/15 attacks) with 0/11 false alarms · p95 346 ms on a CPU-only laptop ·
 FastAPI + React + Docker**
 
 A zero-trust security gateway that sits between enterprise apps (RAG systems, AI agents, internal copilots) and the LLM.
@@ -88,7 +88,7 @@ python eval/benchmark.py           # writes eval/report.md
 docker compose up --build          # UI: http://localhost:8080   API: http://localhost:8000/docs
 ```
 
-The default image uses the regex + heuristic stages and idles at about 45 MB of RAM.
+The default image uses the regex + heuristic stages and needs about 100 MB of RAM.
 
 ## Running on a 16 GB laptop (no GPU)
 
@@ -97,13 +97,14 @@ Turn heavy stages on one at a time. Everything runs on CPU.
 | Setup | Extra RAM | Latency per request | How |
 |---|---|---|---|
 | Core (regex, heuristic ML, heuristic intent) | ~100 MB | under 5 ms | default |
-| + DeBERTa prompt-injection classifier | ~0.8–1 GB | ~50–200 ms on CPU | see below |
+| + DeBERTa prompt-injection classifier | ~0.8–1 GB | p50 178 ms, p95 346 ms (measured) | see below |
 | + Presidio with `en_core_web_sm` | ~0.4 GB | +10–30 ms | `PII_ENGINE=presidio` |
 | + Ollama `qwen2.5:1.5b` (Q4) intent judge | ~1.5–2 GB | +1–3 s | `INTENT_MODE=ollama` |
 | + Ollama as the RAG answer model | shared with above | +2–5 s | `RAG_LLM=ollama` |
 
-Everything together stays around 4–5 GB, leaving room for your IDE and browser. The latency figures for the
-optional stages are typical CPU numbers, not measured in this repo (see "Honest status" below).
+Everything together stays around 4–5 GB, leaving room for your IDE and browser. The DeBERTa latency was measured
+on a 16 GB laptop; the Presidio and Ollama figures are typical CPU numbers, not measured in this repo (see
+"Limitations and next steps" below).
 
 **DeBERTa + Presidio (local):**
 
@@ -228,7 +229,7 @@ and the public `deepset/prompt-injections` test split were never used for tuning
 |---|---|---|
 | builtin (198) | 0.977 / 0.000 | 0.985 / 1.000 / 0.031 |
 | challenge (39) | 1.000 / 0.000 | 1.000 / 1.000 / 0.000 |
-| **holdout** (26) | **0.333** / 0.000 | 1.000 / **0.800** / 0.000 |
+| **holdout** (15 attacks + 11 benign) | **0.333** / 0.000 | 1.000 / **0.800** / 0.000 |
 | **deepset** (116) | – | 1.000 / **0.367** / 0.000 |
 
 DeBERTa ran on CPU on a 16 GB laptop (p50 178 ms, p95 346 ms). Rules alone generalise poorly to new phrasings
@@ -238,7 +239,7 @@ authorization, gateway-owned taint tracking and output DLP are designed to hold 
 
 Suite definitions, the threshold sweep, the false-alarm fix and how to reproduce: [docs/EVALUATION.md](docs/EVALUATION.md).
 
-## Limitations and nex steps
+## Limitations and next steps
 
 Tested here: 112 unit/API tests pass (CI runs them plus the benchmark on every push); all playground scenarios
 return their expected decision.
@@ -285,7 +286,6 @@ docker-compose.yml
 3. Redis for sessions/approvals, Postgres for the audit log.
 4. Fine-tune a small classifier on indirect-injection data (BIPIA) for the context stage.
 5. Python SDK and LangChain/LlamaIndex callbacks.
-6. Multilingual injection coverage (Hindi, Tamil, German) in signatures and evaluation.
 
 ## License
 

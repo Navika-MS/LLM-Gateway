@@ -1,4 +1,4 @@
-# Default:            docker compose up --build              (~1 GB RAM, regex + heuristic stages)
+# Default:            docker compose up --build              (~100 MB RAM, regex + heuristic stages)
 # With DeBERTa:       INSTALL_ML=true ML_MODE=deberta docker compose up --build
 # With local LLM:     docker compose --profile llm up --build  (then: docker compose exec ollama ollama pull qwen2.5:1.5b)
 services:
@@ -21,7 +21,9 @@ services:
       OLLAMA_MODEL: ${OLLAMA_MODEL:-qwen2.5:1.5b}
       TOKENIZATION_SECRET: ${TOKENIZATION_SECRET:-change-me-in-production}
       GATEWAY_JWT_SECRET: ${GATEWAY_JWT_SECRET:-}
-      CORS_ORIGINS: http://localhost:8080,http://localhost:5173
+      JWT_TRUST_PERMISSIONS: ${JWT_TRUST_PERMISSIONS:-false}
+      GATEWAY_API_KEYS: ${GATEWAY_API_KEYS:-}                 # JSON; empty = demo keys (dev only)
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:8080,http://localhost:5173}
     volumes:
       - gateway-data:/app/data
       - hf-models:/models
