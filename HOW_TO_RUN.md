@@ -12,9 +12,12 @@ Commands are given for **Windows (PowerShell)** and **macOS/Linux**. Pick one pa
 | Docker Desktop (only for path B) | any recent | `docker --version` |
 | Ollama (optional) | any | `ollama --version` |
 
-Unzip `llm-guardrail-gateway.zip` into an **empty folder** (not on top of an older copy) and open a terminal in the
-`llm-guardrail-gateway` folder it creates. If you see `llm-guardrail-gateway\llm-guardrail-gateway`, use the inner one.
-Only ever run one backend at a time: close old terminals from earlier versions first.
+Clone the repository and open a terminal in it:
+
+    git clone https://github.com/Navika-MS/LLM-Gateway.git
+    cd LLM-Gateway
+
+Only run one backend at a time. If an older copy is still running, close its terminal first.
 
 ---
 
@@ -143,7 +146,7 @@ numbers into the README's Evaluation section.
 
 ## Path B: Docker
 
-Start Docker Desktop, then in the `llm-guardrail-gateway` folder:
+Start Docker Desktop, then in the `LLM-Gateway` folder:
 
 ```bash
 docker compose up --build
@@ -173,7 +176,7 @@ Stop with Ctrl+C, or `docker compose down`.
 
 | Problem | Fix |
 |---|---|
-| `uvicorn: command not found` | The venv isn't active. Run the activate command again, or use `python -m uvicorn ...` |
+| UI shows `Unexpected token ... is not valid JSON` | The backend is down or you're on an old build. Run `git pull`, restart the backend, and the UI will show the real error |
 | Port 8000 already in use (`WinError 10048`) | An old backend is still running. Close its terminal, or on Windows: `netstat -ano \| findstr :8000`, then `taskkill /PID <number> /F` |
 | `ConnectError` / `WinError 10061` from `demo_agent.py` | The backend isn't running. Start it (A1) in another terminal first; the script needs it, the benchmark does not |
 | UI shows `Unexpected token ... is not valid JSON` | You are running an old build, or the backend is down. Use the latest zip; it shows the real error instead |
