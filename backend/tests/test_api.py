@@ -65,6 +65,11 @@ def test_audit_and_stats(client):
     assert s["total"] >= 1
 
 
+def test_audit_is_admin_only(client):
+    assert client.get("/v1/audit", headers=EMP).status_code == 403
+    assert client.get("/v1/stats", headers=EMP).status_code == 403
+
+
 def test_scenarios_match_expectations(client):
     from gateway.demo_scenarios import SCENARIOS
 

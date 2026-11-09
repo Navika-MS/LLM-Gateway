@@ -148,15 +148,21 @@ def decide(approval_id: str, action: str, approver: Principal = Depends(require_
 
 # ---------------- dashboard data ----------------
 
+def _require_security_admin(p: Principal) -> None:
+    if p.role != "security_admin":
+        raise HTTPException(403, "the audit log is only visible to security admins")
+
+
 @app.get("/v1/audit")
 def audit_log(limit: int = 100, decision: Optional[str] = None, p: Principal = Depends(authenticate)):
-    tenant = None if p.role == "security_admin" else p.tenant
-    return audit.list_events(min(limit, 500), decision, tenant)
+    _require_security_admin(p)
+    return audit.list_events(min(limit, 500), decision, None)
 
 
 @app.get("/v1/stats")
 def stats(p: Principal = Depends(authenticate)):
-    return audit.stats(None if p.role == "security_admin" else p.tenant)
+    _require_security_admin(p)
+    return audit.stats(None)
 
 
 @app.get("/v1/policy")

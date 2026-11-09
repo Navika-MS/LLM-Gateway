@@ -4,7 +4,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 ![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue)
 
-**111 tests · DeBERTa holdout recall 0.80 at 0% false positives · p95 346 ms on a CPU-only laptop ·
+**112 tests · DeBERTa holdout recall 0.80 at 0% false positives · p95 346 ms on a CPU-only laptop ·
 FastAPI + React + Docker**
 
 A zero-trust security gateway that sits between enterprise apps (RAG systems, AI agents, internal copilots) and the LLM.
@@ -77,7 +77,7 @@ Run the tests and the attack demo:
 
 ```bash
 cd backend
-pytest -q                          # 111 tests
+pytest -q                          # 112 tests
 python scripts/demo_agent.py       # agent reads a poisoned email and tries to exfiltrate data
 python eval/benchmark.py           # writes eval/report.md
 ```
@@ -240,7 +240,7 @@ Suite definitions, the threshold sweep, the false-alarm fix and how to reproduce
 
 ## Limitations and nex steps
 
-Tested here: 111 unit/API tests pass (CI runs them plus the benchmark on every push); all playground scenarios
+Tested here: 112 unit/API tests pass (CI runs them plus the benchmark on every push); all playground scenarios
 return their expected decision.
 
 Known limitations:

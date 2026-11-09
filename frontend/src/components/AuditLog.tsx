@@ -47,7 +47,13 @@ export default function AuditLog({ apiKey }: { apiKey: string }) {
             setError("");
           }
         })
-        .catch((e) => setError(String(e)));
+        .catch((e) =>
+          setError(
+            String(e).includes("403")
+              ? "The audit log is for security admins. Switch 'Calling as' to Root (security admin)."
+              : String(e),
+          ),
+        );
     load();
     const t = live ? setInterval(load, 3000) : undefined;
     return () => {

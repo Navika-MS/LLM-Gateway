@@ -70,7 +70,7 @@ export default function App() {
       <main>
         {page === "playground" && <Playground apiKey={apiKey} setApiKey={setApiKey} />}
         {page === "context" && <ContextInspector apiKey={apiKey} />}
-        {page === "audit" && <AuditLog apiKey={apiKey === "demo-employee-key" ? "demo-admin-key" : apiKey} />}
+        {page === "audit" && <AuditLog apiKey={apiKey} />}
         {page === "policy" && <PolicyView apiKey={apiKey} />}
       </main>
     </div>

@@ -67,7 +67,7 @@ Open http://localhost:5173. The top-right dot should be green ("ML: heuristic").
 ### A4. Tests, terminal demo, benchmark (terminal 3, venv activated, inside `backend`)
 
 ```bash
-pytest -q                          # expect: 111 passed
+pytest -q                          # expect: 112 passed
 python scripts/demo_agent.py       # needs the backend from A1 running
 python eval/benchmark.py           # writes eval/report.md
 ```
@@ -176,10 +176,10 @@ Stop with Ctrl+C, or `docker compose down`.
 
 | Problem | Fix |
 |---|---|
-| UI shows `Unexpected token ... is not valid JSON` | The backend is down or you're on an old build. Run `git pull`, restart the backend, and the UI will show the real error |
+| `uvicorn: command not found` | The venv isn't active. Run the activate command again, or use `python -m uvicorn ...` |
 | Port 8000 already in use (`WinError 10048`) | An old backend is still running. Close its terminal, or on Windows: `netstat -ano \| findstr :8000`, then `taskkill /PID <number> /F` |
 | `ConnectError` / `WinError 10061` from `demo_agent.py` | The backend isn't running. Start it (A1) in another terminal first; the script needs it, the benchmark does not |
-| UI shows `Unexpected token ... is not valid JSON` | You are running an old build, or the backend is down. Use the latest zip; it shows the real error instead |
+| UI shows `Unexpected token ... is not valid JSON` | The backend is down or you're on an old build. Run `git pull`, restart the backend, and the UI will show the real error |
 | Every prompt suddenly needs approval after testing many attacks | Per-user probing protection (10 blocked requests in 10 minutes). As admin: `POST /v1/demo/reset`, or restart the backend |
 | Dashboard says "backend offline" | Start the backend first; check http://localhost:8000/health |
 | PowerShell won't activate the venv | `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned` |
